@@ -1,0 +1,60 @@
+﻿{
+  "title": "BuildBotCore",
+  "version": "1.0.0-*",
+  "buildOptions": {
+    "emitEntryPoint": false,
+    "preserveCompilationContext": true,
+    "debugType": "portable"
+  },
+  "dependencies": {
+    "System.Runtime": "4.1.0",
+    "System.Runtime.Loader": "4.0.0",
+    "Microsoft.NETCore.Portable.Compatibility": "1.0.1",
+    "NETStandard.Library": "1.6.0",
+    "SharpCompress": "0.12.4",
+    "System.Diagnostics.Process": "4.1.0"
+  },
+  "frameworks": {
+    "netstandard1.5": {
+      "buildOptions": {
+        "preserveCompilationContext": true,
+        "debugType": "portable"
+      },
+      "dependencies": {
+        "System.Collections": "4.0.11",
+        "System.Collections.Concurrent": "4.0.12",
+        "System.ComponentModel": "4.0.1",
+        "System.Linq": "4.1.0",
+        "System.Reflection": "4.1.0",
+        "System.Runtime": "4.1.0",
+        "System.Runtime.InteropServices": "4.1.0",
+        "System.Threading": "4.0.11",
+        "System.Threading.Tasks": "4.0.11"
+      }
+    }
+  },
+  "configurations": {
+    "Debug": {
+      "buildOptions": {
+        "define": [
+          "DEBUG",
+          "TRACE"
+        ],
+        "optimize": false,
+        "preserveCompilationContext": true,
+        "debugType": "portable"
+      }
+    },
+    "Release": {
+      "buildOptions": {
+        "define": [
+          "RELEASE",
+          "TRACE"
+        ],
+        "optimize": true,
+        "preserveCompilationContext": true,
+        "debugType": "portable"
+      }
+    }
+  }
+}
