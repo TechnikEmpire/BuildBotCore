@@ -1,3 +1,24 @@
+/// The MIT License (MIT) Copyright (c) 2016 Jesse Nicholson 
+/// 
+/// Permission is hereby granted, free of charge, to any person obtaining a 
+/// copy of this software and associated documentation files (the 
+/// "Software"), to deal in the Software without restriction, including 
+/// without limitation the rights to use, copy, modify, merge, publish, 
+/// distribute, sublicense, and/or sell copies of the Software, and to 
+/// permit persons to whom the Software is furnished to do so, subject to 
+/// the following conditions: 
+/// 
+/// The above copyright notice and this permission notice shall be included 
+/// in all copies or substantial portions of the Software. 
+/// 
+/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS 
+/// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+/// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+/// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+/// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+/// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+/// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. 
+
 using System.Threading;
 using System.Diagnostics;
 using System;
@@ -21,7 +42,14 @@ namespace BuildBotCore
     [Flags]
     public enum Architecture
     {
+        /// <summary>
+        /// Use x86 instruction set.
+        /// </summary>
         x86,
+
+        /// <summary>
+        /// Use x64 instruction set.
+        /// </summary>
         x64
     }
 
@@ -31,9 +59,16 @@ namespace BuildBotCore
     [Flags]
     public enum BuildConfiguration
     {
+        /// <summary>
+        /// Standard debug configuration.
+        /// </summary>
         Debug,
+
+        /// <summary>
+        /// Standard release configuration.
+        /// </summary>
         Release
-    }
+    }   
 
     /// <summary>
     /// The AbstractBuildTask interface specifies the class members required for
@@ -107,9 +142,10 @@ namespace BuildBotCore
         /// non-exception-raising issue, it's expected that at least one
         /// meaningful exception still be returned here.
         /// </remarks>
-        public abstract List<Exception> Errors
+        public List<Exception> Errors
         {
             get;
+            private set;
         }
 
         /// <summary>
@@ -172,6 +208,9 @@ namespace BuildBotCore
         public AbstractBuildTask(string scriptAbsolutePath)
         {
             ScriptAbsolutePath = scriptAbsolutePath;
+
+            // Init non-abstract members.
+            Errors = new List<Exception>();
         }
 
         /// <summary>
@@ -184,11 +223,17 @@ namespace BuildBotCore
 
         /// <summary>
         /// Run the build task.
-        /// </summary>
+        /// </summary>        
+        /// <param name="config">
+        /// Build configurations requested.
+        /// </param>
+        /// <param name="arch">
+        /// Target architectures requested.
+        /// </param>
         /// <returns>
         /// True if the task was a success, false otherwise.
         /// </returns>
-        public abstract bool Run();
+        public abstract bool Run(BuildConfiguration config, Architecture arch);
 
         /// <summary>
         /// Attempts to download a file to the supplied directory, saving either
@@ -247,7 +292,7 @@ namespace BuildBotCore
 
             Debug.Assert(Directory.Exists(targetDirectory) || (!Directory.Exists(targetDirectory) && forceCreateDirectory == true), "Target directory does not exist and forcing its creation was explicitly disallowed.");
 
-            if(!Directory.Exists(targetDirectory) && forceCreateDirectory == false)
+            if (!Directory.Exists(targetDirectory) && forceCreateDirectory == false)
             {
                 throw new ArgumentException("Supplied target directory does not exist, yet force create directory was explicitly set to false.", nameof(targetDirectory));
             }
@@ -276,7 +321,7 @@ namespace BuildBotCore
 
                 Debug.Assert(hasFilename, "A file name for the download was not supplied and none could be extracted from the response headers.");
 
-                if(!hasFilename)
+                if (!hasFilename)
                 {
                     throw new HttpRequestException("A file name for the download was not supplied and none could be extracted from the response headers.");
                 }
@@ -300,7 +345,7 @@ namespace BuildBotCore
                         {
                             // In total bytes read.
                             totalBytesRead += (ulong)bytesRead;
-                            
+
                             await destinationFileStream.WriteAsync(buffer, 0, bytesRead);
 
                             // Report status
@@ -351,7 +396,7 @@ namespace BuildBotCore
             if (forceCreateDirectory)
             {
                 if (!Directory.Exists(decompressedPath))
-                {                    
+                {
                     Directory.CreateDirectory(decompressedPath);
                 }
             }
@@ -371,7 +416,7 @@ namespace BuildBotCore
             }
 
             // Can't extract to nowhere, especially nowhere we can't create.
-            if(!Directory.Exists(decompressedPath) && forceCreateDirectory == false)
+            if (!Directory.Exists(decompressedPath) && forceCreateDirectory == false)
             {
                 throw new ArgumentException("Supplied decompression directory does not exist, yet force create directory was explicitly set to false.", nameof(decompressedPath));
             }
@@ -388,19 +433,25 @@ namespace BuildBotCore
         }
 
         /// <summary>
-        ///
+        /// Runs the given process with arguments and waits for the process to
+        /// exit. This is a convenience function for running simple external
+        /// tasks, but a lot of configuration capability is provided via optional
+        /// function arguments.
         /// </summary>
         /// <param name="workingDirectory">
-        /// 
+        /// The working directory from which to run the process.
         /// </param>
         /// <param name="processName">
-        /// 
+        /// The name of the binary to execute.
         /// </param>
         /// <param name="processArgs">
-        /// 
+        /// Arguments to pass to the binary upon execution.
+        /// </param>
+        /// <param name="environment">
+        /// Environmental variables to set for the binary to be executed.
         /// </param>
         /// <param name="processPath">
-        /// 
+        /// The path to the binary to execute.
         /// </param>
         /// <remarks>
         /// May throw exceptions related to file IO or path formatting
@@ -409,14 +460,26 @@ namespace BuildBotCore
         /// handle and return exceptions via the appropriate exposed properties
         /// or methods.
         ///
-        /// This method always waits for the spawned process to exit. 
-        /// </remarks>
+        /// This method always waits for the spawned process to exit.
+        /// </remarks>        
+        /// <param name="onStandardError">
+        /// Callback for receiving standard error data from the process. If this
+        /// callback is not supplied, it will be redirected to the parent
+        /// console.
+        /// </param>
+        /// <param name="onStandardOut">
+        /// Callback for receiving standard output data from the process. If
+        /// this callback is not supplied, it will be redirected to the parent
+        /// console.
+        /// </param>
         /// <returns>
-        /// 
+        /// The exit code returned by the executed binary.
         /// </returns>
         protected int RunProcess(string workingDirectory, string processName,
             List<string> processArgs, int waitMillisections = Timeout.Infinite,
-            string processPath = null, bool redirectStderr = false, bool redirectStdout = false)
+            IDictionary<string, string> environment = null,
+            string processPath = null, DataReceivedEventHandler onStandardError = null,
+            DataReceivedEventHandler onStandardOut = null)
         {
             // The param being  non-null is insufficient to deem it valid.
             bool procPathExists = false;
@@ -439,25 +502,32 @@ namespace BuildBotCore
             p.StartInfo.FileName = procPathExists == false ? processName : processPath + Path.PathSeparator + processName;
             p.StartInfo.CreateNoWindow = true;
 
-            if (redirectStderr)
+            p.StartInfo.RedirectStandardError = true;
+            p.StartInfo.RedirectStandardOutput = true;
+
+            if (onStandardError != null)
             {
-                p.StartInfo.RedirectStandardError = true;
+                p.ErrorDataReceived += onStandardError;
+            }
+            else
+            {
+                p.ErrorDataReceived += ((sender, e) =>
+                {
+                    Console.WriteLine(e.Data);
+                });
             }
 
-            if (redirectStdout)
+            if (onStandardOut != null)
             {
-                p.StartInfo.RedirectStandardOutput = true;
+                p.OutputDataReceived += onStandardOut;
             }
-
-            p.ErrorDataReceived += ((sender, e) =>
+            else
             {
-                Console.WriteLine(e.Data);
-            });
-
-            p.OutputDataReceived += ((sender, e) =>
-            {
-                Console.WriteLine(e.Data);
-            });
+                p.OutputDataReceived += ((sender, e) =>
+                {
+                    Console.WriteLine(e.Data);
+                });
+            }
 
             p.Start();
 

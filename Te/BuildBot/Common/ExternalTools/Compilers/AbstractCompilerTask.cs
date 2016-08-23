@@ -1,6 +1,28 @@
 
+/// The MIT License (MIT) Copyright (c) 2016 Jesse Nicholson 
+/// 
+/// Permission is hereby granted, free of charge, to any person obtaining a 
+/// copy of this software and associated documentation files (the 
+/// "Software"), to deal in the Software without restriction, including 
+/// without limitation the rights to use, copy, modify, merge, publish, 
+/// distribute, sublicense, and/or sell copies of the Software, and to 
+/// permit persons to whom the Software is furnished to do so, subject to 
+/// the following conditions: 
+/// 
+/// The above copyright notice and this permission notice shall be included 
+/// in all copies or substantial portions of the Software. 
+/// 
+/// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS 
+/// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF 
+/// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. 
+/// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY 
+/// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, 
+/// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE 
+/// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. 
+
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -14,6 +36,33 @@ namespace BuildBotCore
         {
             namespace Compilers
             {
+
+                /// <summary>
+                /// An enum of all possible assembly types that can be
+                /// generated.
+                /// </summary>
+                public enum AssemblyType
+                {
+                    /// <summary>
+                    /// Not specified. Default value.
+                    /// </summary>
+                    Unspecified,
+                    
+                    /// <summary>
+                    /// Generate a shared library.
+                    /// </summary>
+                    SharedLibrary,
+
+                    /// <summary>
+                    /// Generate a static library.
+                    /// </summary>
+                    StaticLibrary,
+
+                    /// <summary>
+                    /// Generate an executable.
+                    /// </summary>
+                    Executable
+                }
 
                 /// <summary>
                 /// The AbstractCompilerTask class provides properties and
@@ -38,6 +87,11 @@ namespace BuildBotCore
                     /// Private data member for the public CompilerFlags property.
                     /// </summary>
                     private List<string> m_compilerFlags;
+
+                    /// <summary>
+                    /// Private data member for the public LinkerFlags property.
+                    /// </summary>
+                    private List<string> m_linkerFlags;
 
                     /// <summary>
                     /// Private data member for the public IntermediaryDirectory property.
@@ -99,7 +153,7 @@ namespace BuildBotCore
 
                         set
                         {
-                            m_workingDirectory = value;
+                            m_workingDirectory = value.ConvertToHostOsPath();
                         }
                     }
 
@@ -365,6 +419,17 @@ namespace BuildBotCore
                     }
 
                     /// <summary>
+                    /// Gets or sets the output assembly type. Defaults to
+                    /// Unspecified. Must be set manually or the Run() command
+                    /// will throw and fail.
+                    /// </summary>
+                    public AssemblyType OutputAssemblyType
+                    {
+                        get;
+                        set;
+                    }
+
+                    /// <summary>
                     /// Gets or sets flags that should be supplied to the
                     /// compiler during compilation.
                     /// </summary>
@@ -388,13 +453,48 @@ namespace BuildBotCore
                     }
 
                     /// <summary>
+                    /// Gets or sets flags that should be supplied to the
+                    /// compiler during compilation.
+                    /// </summary>
+                    public List<string> LinkerFlags
+                    {
+                        get
+                        {
+                            return m_linkerFlags;
+                        }
+
+                        set
+                        {
+                            m_linkerFlags = value;
+
+                            // Silently enforce non-null, but rather empty.
+                            if (m_linkerFlags == null)
+                            {
+                                m_linkerFlags = new List<string>();
+                            }
+                        }
+                    }
+
+                    /// <summary>
                     /// Gets or sets the directory where intermediaries
                     /// generated during compilation should be stored.
                     /// </summary>
+                    /// <remarks>
+                    /// This directory must be an absolute path, even with
+                    /// StrictPaths off. The reason for this requirement is
+                    /// because on clean operations, this directory has all
+                    /// contents deleted. Therefore, so ensure BuildBot cannot
+                    /// ever be blamed for deleting someones precious data, this
+                    /// must be an absolute path.
+                    /// </remarks>
                     /// <exception cref="DirectoryNotFoundException">
                     /// In the event that StrictPaths is true, and the parent
                     /// directory for the supplied intermediary directory does
                     /// not exist, then the setter for this property will throw.
+                    /// </exception>
+                    /// <exception cref="ArgumentException">
+                    /// In the event that the supplied path is not absolute,
+                    /// this method will throw.
                     /// </exception>
                     public string IntermediaryDirectory
                     {
@@ -415,6 +515,14 @@ namespace BuildBotCore
 
                             // Ensure path separator is proper for the environment and no trailing separators.
                             m_intermediaryDirectory = m_intermediaryDirectory.ConvertToHostOsPath();
+
+                            // Ensure that this is an absolute path.
+                            Debug.Assert(Path.IsPathRooted(m_intermediaryDirectory), "Must be an absolute path.");
+
+                            if (!Path.IsPathRooted(m_intermediaryDirectory))
+                            {
+                                throw new ArgumentException("Must be an absolute path.", nameof(IntermediaryDirectory));
+                            }
 
                             if (StrictPaths)
                             {
