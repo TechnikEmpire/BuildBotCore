@@ -107,12 +107,7 @@ namespace BuildBotCore
                     /// <summary>
                     /// Private data member for the public LibraryPaths property.
                     /// </summary>
-                    private List<string> m_libraryPaths;
-
-                    /// <summary>
-                    /// Private data member for the public WorkingDirectory property.
-                    /// </summary>
-                    private string m_workingDirectory;
+                    private List<string> m_libraryPaths;                    
 
                     /// <summary>
                     /// Private data member for the public Sources property.

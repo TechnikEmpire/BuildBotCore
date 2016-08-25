@@ -68,7 +68,7 @@ namespace BuildBotCore
         /// Standard release configuration.
         /// </summary>
         Release
-    }   
+    }
 
     /// <summary>
     /// The AbstractBuildTask interface specifies the class members required for
@@ -76,6 +76,11 @@ namespace BuildBotCore
     /// </summary>
     public abstract class AbstractBuildTask
     {
+
+        /// <summary>
+        /// Private data member for the public WorkingDirectory property.
+        /// </summary>
+        private string m_workingDirectory;
 
         /// <summary>
         /// Gets the supported target architectures for the build task in the
@@ -197,6 +202,27 @@ namespace BuildBotCore
         }
 
         /// <summary>
+        /// Gets or sets the working directory. This is where the
+        /// compiler will be invoked from, or if the compiler
+        /// supports the concept of a current working directory as
+        /// an argument, will be supplied as an argument. If this is
+        /// not specified, then the current working directory will
+        /// be wherever the host build process has currently set it.
+        /// </summary>
+        public string WorkingDirectory
+        {
+            get
+            {
+                return m_workingDirectory;
+            }
+
+            set
+            {
+                m_workingDirectory = value.ConvertToHostOsPath();
+            }
+        }
+
+        /// <summary>
         /// Constructs a new AbstractBuildTask object.
         /// </summary>
         /// <param name="scriptAbsolutePath">
@@ -211,6 +237,16 @@ namespace BuildBotCore
 
             // Init non-abstract members.
             Errors = new List<Exception>();
+
+            m_workingDirectory = string.Empty;
+
+            // Initially set the working directory to the parent of
+            // the build script folder path. Build scripts are
+            // designed to always be in a ".buildbot" path within
+            // the project they are meant for. So by getting the
+            // parent of the parent of this script path, we should
+            // have the main project directory.
+            m_workingDirectory = Directory.GetParent(scriptAbsolutePath.ConvertToHostOsPath()).Parent.FullName;
         }
 
         /// <summary>
