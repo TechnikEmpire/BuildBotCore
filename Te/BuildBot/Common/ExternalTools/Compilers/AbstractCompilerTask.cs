@@ -129,28 +129,7 @@ namespace BuildBotCore
                     {
                         get;
                         set;
-                    }
-
-                    /// <summary>
-                    /// Gets or sets the working directory. This is where the
-                    /// compiler will be invoked from, or if the compiler
-                    /// supports the concept of a current working directory as
-                    /// an argument, will be supplied as an argument. If this is
-                    /// not specified, then the current working directory will
-                    /// be wherever the host build process has currently set it.
-                    /// </summary>
-                    public string WorkingDirectory
-                    {
-                        get
-                        {
-                            return m_workingDirectory;
-                        }
-
-                        set
-                        {
-                            m_workingDirectory = value.ConvertToHostOsPath();
-                        }
-                    }
+                    }                    
 
                     /// <summary>
                     /// 
@@ -637,20 +616,11 @@ namespace BuildBotCore
                         m_compilerFlags = new List<string>();
                         m_includePaths = new List<string>();
                         m_intermediaryDirectory = string.Empty;
-                        m_libraryPaths = new List<string>();
-                        m_workingDirectory = string.Empty;
+                        m_libraryPaths = new List<string>();                        
                         m_additionalLibraries = new List<string>();
 
                         // Default string paths to false.
-                        StrictPaths = false;
-
-                        // Initially set the working directory to the parent of
-                        // the build script folder path. Build scripts are
-                        // designed to always be in a ".buildbot" path within
-                        // the project they are meant for. So by getting the
-                        // parent of the parent of this script path, we should
-                        // have the main project directory.
-                        m_workingDirectory = Directory.GetParent(scriptAbsolutePath.ConvertToHostOsPath()).Parent.FullName;
+                        StrictPaths = false;                        
                     }
                 }
             }
