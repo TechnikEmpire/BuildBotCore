@@ -186,17 +186,26 @@ namespace BuildBotCore
                                     foreach (var entry in m_sources)
                                     {
                                         var saneEntry = entry.ConvertToHostOsPath();
-                                        // This should be sufficient for detecting absolute paths.
-                                        // XXX TODO - Verify this.
-                                        if (Path.IsPathRooted(saneEntry))
+
+                                        // Determine if this is just a file name or has a parent dir specified.                                    
+                                        var fName = Path.GetFileName(saneEntry);
+
+                                        if(!fName.Equals(saneEntry, StringComparison.OrdinalIgnoreCase))
                                         {
-                                            if (!File.Exists(saneEntry))
+                                            // This means there must be directory info in our sane entry.
+                                            // This must be true because our retrieved file name does not
+                                            // match the entry name.
+                                            //
+                                            // As such, we simply check to see if the file exists.
+                                            if (!File.Exists(saneEntry) && !File.Exists(Path.GetFullPath(saneEntry)))
                                             {
                                                 throw new FileNotFoundException(string.Format("Supplied source file could not be found: {0}.", saneEntry));
                                             }
                                         }
                                         else
                                         {
+                                            // There's no path information, so we'll check to see if the
+                                            // file is inside an included, relevant directory.
                                             if (string.IsNullOrEmpty(WorkingDirectory) || string.IsNullOrWhiteSpace(WorkingDirectory))
                                             {
                                                 throw new FileNotFoundException(string.Format(@"Supplied source file could not be found: {0}. 
@@ -206,7 +215,7 @@ namespace BuildBotCore
 
                                             bool foundSourceRelative = false;
 
-                                            string expandedPath = (WorkingDirectory + Path.PathSeparator + saneEntry);
+                                            string expandedPath = (WorkingDirectory + Path.DirectorySeparatorChar + saneEntry);
 
                                             if (File.Exists(expandedPath))
                                             {
@@ -285,14 +294,22 @@ namespace BuildBotCore
                                 {
                                     foreach (var entry in m_additionalLibraries)
                                     {
-                                        // This should be sufficient for detecting absolute paths.
-                                        // XXX TODO - Verify this.
-                                        if (Path.IsPathRooted(entry))
+                                        var saneEntry = entry.ConvertToHostOsPath();
+
+                                        // Determine if this is just a file name or has a parent dir specified.                                    
+                                        var fName = Path.GetFileName(saneEntry);
+
+                                        if(!fName.Equals(saneEntry, StringComparison.OrdinalIgnoreCase))
                                         {
-                                            if (!File.Exists(entry))
+                                            // This means there must be directory info in our sane entry.
+                                            // This must be true because our retrieved file name does not
+                                            // match the entry name.
+                                            //
+                                            // As such, we simply check to see if the file exists.
+                                            if (!File.Exists(saneEntry) && !File.Exists(Path.GetFullPath(saneEntry)))
                                             {
                                                 throw new FileNotFoundException(string.Format("Supplied library could not be found: {0}.", entry));
-                                            }
+                                            }                                           
                                         }
                                         else
                                         {
@@ -319,7 +336,7 @@ namespace BuildBotCore
                                             // library directories paths and check those.
                                             foreach (var libPathEntry in LibraryPaths)
                                             {
-                                                string expandedPath = (libPathEntry + Path.PathSeparator + entry);
+                                                string expandedPath = (libPathEntry + Path.DirectorySeparatorChar + saneEntry);
 
                                                 if (File.Exists(expandedPath))
                                                 {
@@ -335,7 +352,7 @@ namespace BuildBotCore
 
                                             if (!foundLibInLibPath)
                                             {
-                                                throw new FileNotFoundException(string.Format("Supplied library could not be found: {0}.", entry));
+                                                throw new FileNotFoundException(string.Format("Supplied library could not be found: {0}.", saneEntry));
                                             }
                                         }
                                     }
@@ -516,10 +533,16 @@ namespace BuildBotCore
                             // Ensure path separator is proper for the environment and no trailing separators.
                             m_intermediaryDirectory = m_intermediaryDirectory.ConvertToHostOsPath();
 
-                            // Ensure that this is an absolute path.
-                            Debug.Assert(Path.IsPathRooted(m_intermediaryDirectory), "Must be an absolute path.");
+                            string fullPath = Path.GetFullPath(m_intermediaryDirectory).ConvertToHostOsPath();
 
-                            if (!Path.IsPathRooted(m_intermediaryDirectory))
+                            bool isAbsPath = false;
+
+                            isAbsPath = fullPath.Equals(m_intermediaryDirectory, StringComparison.OrdinalIgnoreCase);
+
+                            // Ensure that this is an absolute path.
+                            Debug.Assert(isAbsPath, "Must be an absolute path.");
+
+                            if (!isAbsPath)
                             {
                                 throw new ArgumentException("Must be an absolute path.", nameof(IntermediaryDirectory));
                             }

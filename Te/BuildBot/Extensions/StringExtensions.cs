@@ -55,12 +55,12 @@ namespace BuildBot
                 if (value.Length > 0)
                 {
                     // Regex replace all slashes of any kind, greedy match, with path separator.
-                    value = Regex.Replace(value, "[/]+", Path.PathSeparator.ToString());
-                    value = Regex.Replace(value, "[\\]+", Path.PathSeparator.ToString());
+                    value = Regex.Replace(value, @"[/]+", Path.DirectorySeparatorChar.ToString());
+                    value = Regex.Replace(value, @"[\\]+", Path.DirectorySeparatorChar.ToString());
 
                     // Strip out the last character if it's a path separator. In all cases, we 
                     // don't want trailing separator on directory path strings.
-                    if(value.Last() == Path.PathSeparator)
+                    if(value.Last() == Path.DirectorySeparatorChar)
                     {
                         value = value.Substring(0, value.Length-1);
                     }

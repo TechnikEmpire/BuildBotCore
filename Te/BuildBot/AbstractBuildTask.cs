@@ -335,7 +335,7 @@ namespace BuildBotCore
 
                 ulong totalBytesRead = 0;
 
-                using (var destinationFileStream = File.Create(targetDirectory + Path.PathSeparator + targetFileName))
+                using (var destinationFileStream = File.Create(targetDirectory + Path.DirectorySeparatorChar + targetFileName))
                 {
                     using (var stream = await responseMessage.Content.ReadAsStreamAsync())
                     {
@@ -499,7 +499,7 @@ namespace BuildBotCore
             Process p = new Process();
             p.StartInfo.Arguments = string.Join(" ", processArgs);
             p.StartInfo.WorkingDirectory = workingDirectory;
-            p.StartInfo.FileName = procPathExists == false ? processName : processPath + Path.PathSeparator + processName;
+            p.StartInfo.FileName = procPathExists == false ? processName : processPath + Path.DirectorySeparatorChar + processName;
             p.StartInfo.CreateNoWindow = true;
 
             p.StartInfo.RedirectStandardError = true;

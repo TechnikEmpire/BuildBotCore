@@ -236,13 +236,13 @@ namespace BuildBotCore
                                         }
 
                                         // Build out so that it's Debug/Release x86/x64
-                                        fullIntermediaryDir = Path.PathSeparator + string.Format("{0} {1}", cfg.ToString(), a.ToString());
+                                        fullIntermediaryDir = Path.DirectorySeparatorChar + string.Format("{0} {1}", cfg.ToString(), a.ToString());
 
                                         // Now we need the ENV vars for our tool version.
                                         var envVars = GetEnvironmentVariables(MinimumRequiredToolVersion, installedVcVersions[MinimumRequiredToolVersion], a);
 
                                         // Set the intermediary output directory.
-                                        CompilerFlags.Add(string.Format("/Fo{0}", fullIntermediaryDir + Path.PathSeparator));
+                                        CompilerFlags.Add(string.Format("/Fo{0}", fullIntermediaryDir + Path.DirectorySeparatorChar));
 
                                         switch (a)
                                         {
@@ -362,9 +362,9 @@ namespace BuildBotCore
                                     // If so, we'll include this version in our returned collection.
                                     commonPath = commonPath.Substring(0, commonPosition).ConvertToHostOsPath();
 
-                                    var vcBinDir = commonPath + Path.PathSeparator + "VC" + Path.PathSeparator + "bin";
+                                    var vcBinDir = commonPath + Path.DirectorySeparatorChar + "VC" + Path.DirectorySeparatorChar + "bin";
 
-                                    var clPath = vcBinDir + Path.PathSeparator + "cl.exe";
+                                    var clPath = vcBinDir + Path.DirectorySeparatorChar + "cl.exe";
                                     if (File.Exists(clPath))
                                     {
                                         installedVersions.Add(toolVer, vcBinDir);
@@ -435,7 +435,7 @@ namespace BuildBotCore
                         // dumps the new/updated environmental variables back out the console standard out,
                         // which we're capturing with our lambda delegates above.
                         var parentDir = Directory.GetParent(clBinPath);
-                        var pathToVcars = parentDir.FullName.ConvertToHostOsPath() + Path.PathSeparator + "vcvarsall.bat";
+                        var pathToVcars = parentDir.FullName.ConvertToHostOsPath() + Path.DirectorySeparatorChar + "vcvarsall.bat";
                         var archString = string.Empty;
 
                         // XXX TODO - Need to support cross compiler targets as well. For example,
