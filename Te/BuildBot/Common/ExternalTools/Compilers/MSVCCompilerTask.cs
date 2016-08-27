@@ -37,7 +37,7 @@ namespace BuildBotCore
         namespace ExternalTools
         {
             namespace Compilers
-            {              
+            {
 
                 /// <summary>
                 /// The MSVCCompilerTask class represents a generic interface to
@@ -58,17 +58,17 @@ namespace BuildBotCore
                         /// <summary>
                         /// Visual Studio 2012.
                         /// </summary>      
-                        v11,
+                        v11 = 0,
 
                         /// <summary>
                         /// Visual Studio 2013.
                         /// </summary>      
-                        v12,
+                        v12 = 1,
 
                         /// <summary>
                         /// Visual Studio 2015.
                         /// </summary>      
-                        v14
+                        v14 = 2
                     }
 
                     /// <summary>
@@ -109,7 +109,7 @@ namespace BuildBotCore
                     {
                         get
                         {
-                            bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+                            bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
                             return isWindows;
                         }
@@ -158,19 +158,19 @@ namespace BuildBotCore
                     {
                         // Clean exceptions first.
                         Errors.Clear();
-                        
+
                         try
                         {
                             Directory.Delete(IntermediaryDirectory);
                             Directory.CreateDirectory(IntermediaryDirectory);
                             return true;
                         }
-                        catch(Exception e)
+                        catch (Exception e)
                         {
-                            var cleanException = new Exception("Failed to run clean action. See inner exception for details.", e);                            
+                            var cleanException = new Exception("Failed to run clean action. See inner exception for details.", e);
                             Errors.Add(cleanException);
                         }
-                        
+
                         return false;
                     }
 
@@ -201,14 +201,41 @@ namespace BuildBotCore
                             return false;
                         }
 
+                        // Ensure that we have an output directory.
+                        Debug.Assert(!string.IsNullOrEmpty(OutputDirectory) && !string.IsNullOrWhiteSpace(OutputDirectory), "No output directory defined.");
+                        if (string.IsNullOrEmpty(OutputDirectory) || string.IsNullOrWhiteSpace(OutputDirectory))
+                        {
+                            Errors.Add(new Exception("No output directory defined."));
+                            return false;
+                        }
+
+                        // Ensure that we have an output file name.
+                        Debug.Assert(!string.IsNullOrEmpty(OutputFileName) && !string.IsNullOrWhiteSpace(OutputFileName), "No output file name defined.");
+                        if (string.IsNullOrEmpty(OutputFileName) || string.IsNullOrWhiteSpace(OutputFileName))
+                        {
+                            Errors.Add(new Exception("No output fine name defined."));
+                            return false;
+                        }
+
                         // Ensure we have sources to compile.
                         Debug.Assert(Sources.Count > 0, "No sources defined.");
-
                         if (Sources.Count <= 0)
                         {
                             Errors.Add(new Exception("No sources defined."));
                             return false;
                         }
+
+                        // Make clones of all the various falgs. The reason for this
+                        // is because the user might have specified non-target, non-plat
+                        // specific flags, which we want to apply after we clear/reset
+                        // them ever time we compile for a config.
+                        var defaultCompilerFlags = new List<string>(CompilerFlags.ToArray());
+                        var defaultLinkerFlags = new List<string>(LinkerFlags.ToArray());
+
+                        // Keep track of number of configs/archs we build for. Use
+                        // these counts to determine success.
+                        int totalCompilationAttempts = 0;
+                        int totalCompilationSuccess = 0;
 
                         // Iterate over set configuration flags. Then iterate over set
                         // arch flags, build out ENV for each configuration and run the
@@ -221,11 +248,19 @@ namespace BuildBotCore
                                 {
                                     if (arch.HasFlag(a))
                                     {
+                                        // Begin a compilation attempt for config/arch.
+                                        ++totalCompilationAttempts;
+
+                                        Console.WriteLine(string.Format("Running MSVC Compilation for config: {0} and arch: {1}.", cfg.ToString(), a.ToString()));
+
+                                        // Clone default flags.
+                                        CompilerFlags = new List<string>(defaultCompilerFlags.ToArray());
+                                        LinkerFlags = new List<string>(defaultLinkerFlags.ToArray());
 
                                         // Build intermediary directory
                                         string fullIntermediaryDir = string.Empty;
 
-                                        if(!string.IsNullOrEmpty(IntermediaryDirectory) && !string.IsNullOrWhiteSpace(IntermediaryDirectory))
+                                        if (!string.IsNullOrEmpty(IntermediaryDirectory) && !string.IsNullOrWhiteSpace(IntermediaryDirectory))
                                         {
                                             fullIntermediaryDir = IntermediaryDirectory.ConvertToHostOsPath();
                                         }
@@ -236,13 +271,23 @@ namespace BuildBotCore
                                         }
 
                                         // Build out so that it's Debug/Release x86/x64
-                                        fullIntermediaryDir = Path.DirectorySeparatorChar + string.Format("{0} {1}", cfg.ToString(), a.ToString());
+                                        fullIntermediaryDir = fullIntermediaryDir + Path.DirectorySeparatorChar + string.Format("{0} {1}", cfg.ToString(), a.ToString());
 
                                         // Now we need the ENV vars for our tool version.
                                         var envVars = GetEnvironmentVariables(MinimumRequiredToolVersion, installedVcVersions[MinimumRequiredToolVersion], a);
 
-                                        // Set the intermediary output directory.
-                                        CompilerFlags.Add(string.Format("/Fo{0}", fullIntermediaryDir + Path.DirectorySeparatorChar));
+                                        // Force creation of intermediaries directory.
+                                        Directory.CreateDirectory(fullIntermediaryDir);
+
+                                        // Force creation of output directory for arch/config.
+                                        string configArchOutDir = string.Format("{0}{1} {2}",
+                                            OutputDirectory.ConvertToHostOsPath() + Path.DirectorySeparatorChar + "msvc" + Path.DirectorySeparatorChar,
+                                            cfg.ToString(), a.ToString());
+
+                                        // Set the intermediary output directory. We use a trailing slash
+                                        // here because if we don't, the params won't parse properly when
+                                        // passed to CL.exe.
+                                        CompilerFlags.Add(string.Format("/Fo\"{0}/\"", fullIntermediaryDir));
 
                                         switch (a)
                                         {
@@ -260,70 +305,212 @@ namespace BuildBotCore
                                         }
 
                                         // Whether we're merging the link command.
-                                        bool mergedLink = true;
+                                        bool mergedLink = false;
 
-                                        switch(OutputAssemblyType)
+                                        // Setup final output path. Create it first.
+                                        Directory.CreateDirectory(configArchOutDir);
+                                        string finalOutputPath = configArchOutDir + Path.DirectorySeparatorChar + OutputFileName;
+
+
+                                        switch (OutputAssemblyType)
                                         {
                                             case AssemblyType.Unspecified:
-                                            {
-                                                Errors.Add(new Exception("No output assembly type specified."));
-                                                return false;
-                                            }
+                                                {
+                                                    Errors.Add(new Exception("No output assembly type specified."));
+                                                    return false;
+                                                }
 
                                             case AssemblyType.SharedLibrary:
-                                            {
-                                                // Define User/Win DLL.
-                                                CompilerFlags.Add("/D_USRDLL");
-                                                CompilerFlags.Add("/D_WINDLL");
+                                                {
+                                                    // Define User/Win DLL.
+                                                    CompilerFlags.Add("/D_USRDLL");
+                                                    CompilerFlags.Add("/D_WINDLL");
 
-                                                LinkerFlags.Add("/DLL");
+                                                    LinkerFlags.Add("/DLL");
 
-                                                mergedLink = true;
-                                            }
-                                            break;
+                                                    mergedLink = true;
+
+                                                    // Add appropriate file extension.
+                                                    finalOutputPath += ".dll";
+                                                }
+                                                break;
 
                                             case AssemblyType.StaticLibrary:
-                                            {
-                                                // /c flag means don't link
-                                                if(!CompilerFlags.Contains("/c"))
                                                 {
-                                                    CompilerFlags.Add("/c");
+                                                    // /c flag means don't link
+                                                    if (!CompilerFlags.Contains("/c"))
+                                                    {
+                                                        CompilerFlags.Add("/c");
+                                                    }
+
+                                                    // Add appropriate file extension.
+                                                    finalOutputPath += ".lib";
                                                 }
-                                            }
-                                            break;  
+                                                break;
 
                                             case AssemblyType.Executable:
-                                            {
-                                                mergedLink = true;
-                                            }
-                                            break;                                           
+                                                {
+                                                    mergedLink = true;
+
+                                                    // Add appropriate file extension.
+                                                    finalOutputPath += ".exe";
+                                                }
+                                                break;
                                         }
 
-                                        // Clone.
+                                        // Specify full output path. Spaces escaped later.
+                                        LinkerFlags.Add(string.Format("/OUT:\"{0}\"", finalOutputPath));
+
+                                        // Clone compile flags.
                                         var finalArgs = new List<string>(CompilerFlags);
 
-                                        // Run compiler.
-                                        if(mergedLink)
+                                        // Append includes.
+                                        foreach (var inclPath in IncludePaths)
                                         {
-                                            
+                                            // Escape spaces in path.
+                                            finalArgs.Add("/I");
+                                            finalArgs.Add(inclPath.Replace(" ", @"\\ "));
+                                        }
+
+                                        // Append sources.
+                                        finalArgs = finalArgs.Concat(Sources).ToList();
+
+                                        if (mergedLink)
+                                        {
+                                            // Add linker call if applicable.                           
                                             finalArgs.Add("/link");
                                             finalArgs = finalArgs.Concat(LinkerFlags).ToList();
                                         }
 
+                                        // Run compiler.
+                                        string clExe = "cl.exe";
+                                        var paths = envVars["PATH"].Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
 
-                                        int returnCode = RunProcess(WorkingDirectory, "cl.exe", finalArgs, Timeout.Infinite, envVars);
+                                        // Need to obtain a full path to cl.exe
+                                        var fullClPath = paths.Select(x => Path.Combine(x, clExe))
+                                            .Where(x => File.Exists(x))
+                                            .FirstOrDefault();
+
+                                        if (!string.IsNullOrEmpty(fullClPath) && !string.IsNullOrWhiteSpace(fullClPath))
+                                        {
+                                            clExe = fullClPath;
+                                        }
+                                        else
+                                        {
+                                            Errors.Add(new Exception("Could not find absolute path to cl.exe"));
+                                            return false;
+                                        }
+
+                                        // Print final args.
+                                        //Console.WriteLine(string.Join(" ", finalArgs));
+
+                                        int compileReturnCode = RunProcess(WorkingDirectory, clExe, finalArgs, Timeout.Infinite, envVars);
+
+                                        // If no auto linking, run LIB.
+                                        if (!mergedLink && compileReturnCode == 0)
+                                        {
+                                            // Basically means static library. So, we need to run
+                                            // LIB tool.
+                                            string libExe = "lib.exe";
+
+                                            // Need to obtain a full path to lib.exe
+                                            var fullLibPath = paths.Select(x => Path.Combine(x, libExe))
+                                                .Where(x => File.Exists(x))
+                                                .FirstOrDefault();
+
+                                            if (!string.IsNullOrEmpty(fullLibPath) && !string.IsNullOrWhiteSpace(fullLibPath))
+                                            {
+                                                libExe = fullLibPath;
+                                            }
+                                            else
+                                            {
+                                                Errors.Add(new Exception("Could not find absolute path to lib.exe"));
+                                                return false;
+                                            }
+
+                                            var finalLibArgs = new List<string>();
+
+                                            foreach (var libDir in LibraryPaths)
+                                            {
+                                                // Add all lib dirs with escaped spaces.
+                                                finalLibArgs.Add(string.Format("/LIBPATH {0}", libDir.Replace(" ", @"\\ ")));
+                                            }
+
+                                            // Add all of our generated objects                                            
+                                            foreach (var objFile in Directory.GetFiles(fullIntermediaryDir))
+                                            {
+                                                finalLibArgs.Add(string.Format("\"{0}\"", objFile));
+                                            }
+
+                                            foreach (var linkerArg in LinkerFlags)
+                                            {
+                                                // Add all linker args with escaped spaces.
+                                                finalLibArgs.Add(linkerArg);
+                                            }
+
+                                            // Print all final linker args.
+                                            // Console.WriteLine(string.Join(" ", finalLibArgs));
+
+                                            int libReturnCode = RunProcess(WorkingDirectory, libExe, finalLibArgs, Timeout.Infinite, envVars);
+
+                                            if (libReturnCode != 0)
+                                            {
+                                                return false;
+                                            }
+                                        }
 
                                         // CL always returns 0 for success. Any other value is failure:
                                         // Source:
                                         // https://msdn.microsoft.com/en-us/library/ebh0y918.aspx
-                                        return returnCode == 0;
-                                    }
-                                }
-                            }                            
-                        }                        
+                                        if (compileReturnCode != 0)
+                                        {
+                                            return false;
+                                        }
+                                        else
+                                        {
+                                            ++totalCompilationSuccess;
+                                        }
 
+                                    } // End of if building for arch.
+                                } // End of foreach architecture.
+                            } // End of if building for config.
+                        } // End of foreach config.
+
+                        bool success = totalCompilationAttempts > 0 && totalCompilationSuccess == totalCompilationAttempts;
+
+                        if (success)
+                        {
+                            // Copy includes if we've successfully built a library and includes is specified.                                        
+                            switch (OutputAssemblyType)
+                            {
+                                case AssemblyType.SharedLibrary:
+                                case AssemblyType.StaticLibrary:
+                                    {
+                                        // Only if auto copy is true.
+                                        if (AutoCopyIncludes)
+                                        {
+
+                                            // Copy all .h, .hpp, .hxx etc. 
+                                            HashSet<string> exclusions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                                            exclusions.Add(".c");
+                                            exclusions.Add(".cpp");
+                                            exclusions.Add(".cxx");
+
+                                            foreach (var includePath in IncludePaths)
+                                            {
+                                                CopyDirectory(includePath, OutputDirectory + Path.DirectorySeparatorChar + "Include", true, true, null, exclusions);
+                                            }
+                                        }
+                                    }
+                                    break;
+
+                                default:
+                                    break;
+                            }
+
+                        }
                         // Always assume failure first.
-                        return false;
+                        return success;
                     }
 
                     /// <summary>
@@ -378,9 +565,9 @@ namespace BuildBotCore
                     }
 
                     /// <summary>
-                    /// Gets A dictionary containing the correct environmental
-                    /// variables for the supplied tool version and target
-                    /// architecture.
+                    /// Gets a case-insensitive dictionary containing the
+                    /// correct environmental variables for the supplied tool
+                    /// version and target architecture.
                     /// </summary>
                     /// <returns>
                     /// A dictionary containing the correct environmental
@@ -412,7 +599,14 @@ namespace BuildBotCore
                         }
 
                         // Grab the current environmental variables.
-                        var currentEnv = (Dictionary<string, string>)Environment.GetEnvironmentVariables();
+                        var currentEnv = Environment.GetEnvironmentVariables();
+
+                        // Move then into an i-case dictionary.
+                        var currentEnvDictionary = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        foreach (var key in currentEnv.Keys)
+                        {
+                            currentEnvDictionary.Add((string)key, (string)currentEnv[key]);
+                        }
 
                         StringBuilder stdOutput = new StringBuilder();
                         StringBuilder stdErrout = new StringBuilder();
@@ -420,12 +614,12 @@ namespace BuildBotCore
                         // Set it up so we pipe all err and stdout back to us.
                         DataReceivedEventHandler stdOut = ((object sender, DataReceivedEventArgs e) =>
                         {
-                            stdOutput.Append(e.Data);
+                            stdOutput.AppendLine(e.Data);
                         });
 
                         DataReceivedEventHandler stdErr = ((object sender, DataReceivedEventArgs e) =>
                         {
-                            stdErrout.Append(e.Data);
+                            stdErrout.AppendLine(e.Data);
                         });
 
                         // So what we're doing here is we're taking the input tool bin directory, going
@@ -458,7 +652,7 @@ namespace BuildBotCore
 
                         // Example of the call string expanded/populated:
                         // call "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall.bat" amd64 && SET
-                        string callArgs = string.Format("/C \"call \"{0}\" {1} && SET", pathToVcars, archString);
+                        string callArgs = string.Format("/C call \"{0}\" {1} && SET", pathToVcars, archString);
 
                         // Once we run cmd.exe with the above args, we'll have captured all environmental
                         // variables required to run the compiler tools manually for the target architecture.
@@ -471,10 +665,11 @@ namespace BuildBotCore
                             throw new ArgumentException(string.Format("When trying to load MSVC dev environment for arch {0}, the process returned an error code.", arch), nameof(arch));
                         }
 
+
                         // Now we should have a bunch of VAR=VALUE params, one per line. So we'll
                         // look for those and try to extract them when we find them.
                         string[] delim = { "\n", "\r" };
-                        string[] lines = stdOutput.ToString().Split(delim, StringSplitOptions.None);
+                        string[] lines = stdOutput.ToString().Split(delim, StringSplitOptions.RemoveEmptyEntries);
                         foreach (var line in lines)
                         {
                             var split = line.Split('=');
@@ -488,23 +683,24 @@ namespace BuildBotCore
                             // did not ask for empty results to be pruned from the split operation results.
                             if (split.Length == 2)
                             {
+
                                 if (!string.IsNullOrEmpty(split[0]) && !string.IsNullOrWhiteSpace(split[0]))
                                 {
                                     // If this variable already exists, just update/overwrite it.
-                                    if (currentEnv.ContainsKey(split[0]))
+                                    if (currentEnv.Contains(split[0]))
                                     {
-                                        currentEnv[split[0]] = split[1];
+                                        currentEnvDictionary[split[0]] = split[1];
                                     }
                                     else
                                     {
                                         // Variable doesn't exit, so add it.
-                                        currentEnv.Add(split[0], split[1]);
+                                        currentEnvDictionary.Add(split[0], split[1]);
                                     }
                                 }
                             }
                         }
 
-                        return currentEnv;
+                        return currentEnvDictionary;
                     }
                 }
             }

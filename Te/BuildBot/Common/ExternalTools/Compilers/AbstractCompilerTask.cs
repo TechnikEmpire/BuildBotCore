@@ -115,6 +115,32 @@ namespace BuildBotCore
                     private List<string> m_sources;
 
                     /// <summary>
+                    /// Private data member for the public OutputFileName property.
+                    /// </summary>
+                    private string m_outputFileName;
+
+                    /// <summary>
+                    /// Private data member for the public OutputDirectory property.
+                    /// </summary>
+                    private string m_outputDirectory;
+
+                    /// <summary>
+                    /// Gets or sets whether or not the compiler should
+                    /// automatically copy all discovered header files to an
+                    /// Include directory within the output target directory on
+                    /// successful build. Defaults to false.
+                    /// </summary>
+                    /// <remarks>
+                    /// This is only respected when the assembly type to be
+                    /// compiled is library.
+                    /// </remarks>
+                    public bool AutoCopyIncludes
+                    {
+                        get;
+                        set;
+                    }
+
+                    /// <summary>
                     /// Gets or sets whether or not to verify that supplied
                     /// include paths, directory paths and source file paths
                     /// exist.
@@ -602,6 +628,89 @@ namespace BuildBotCore
                     }
 
                     /// <summary>
+                    /// Gets or sets the output file name. This must be purely a
+                    /// legal file name, and cannot contain any directory/path
+                    /// information. The path/directory must be set via the
+                    /// separate OutputDirectory property. Users should not set
+                    /// the extension as this will be appended automatically
+                    /// based on things such as the host os platform and
+                    /// assembly type.
+                    /// </summary>
+                    /// <exception cref="ArgumentException">
+                    /// In the event that the supplied file name contains
+                    /// directory/path information, the setter for this property
+                    /// will throw.
+                    /// </exception>
+                    /// <remarks>
+                    /// Note that this directory will not directly contain the
+                    /// generated final assembly. Rather, a sub-directory
+                    /// matching the current build configuration and target
+                    /// architecture will be created, where the output assembly
+                    /// will be stored.
+                    /// </remarks>
+                    public string OutputFileName
+                    {
+                        get
+                        {
+                            return m_outputFileName;
+                        }
+
+                        set
+                        {
+                            m_outputFileName = value;
+                            
+                            // Check if it's just a file name, if non-null/empty/whitespace.
+                            if(!string.IsNullOrEmpty(value) && !string.IsNullOrWhiteSpace(value))
+                            {
+                                var fName = Path.GetFileName(value);
+
+                                Debug.Assert(fName.Equals(m_outputFileName), "Supplied output file name must not contain directory page information.");
+
+                                if(!fName.Equals(m_outputFileName))
+                                {
+                                    throw new ArgumentException("Supplied output file name must not contain directory page information.");
+                                }
+                            }                            
+                        }
+                    }
+
+                    /// <summary>
+                    /// Gets or sets the output directory. This must be purely a
+                    /// legal directory path. The output file name must be set
+                    /// via the seperate OutputFileName property. Must be  an
+                    /// absolute path.
+                    /// </summary>                    
+                    /// <exception cref="ArgumentException">
+                    /// In the event that the supplied output directory is not
+                    /// an absolute path, this propery setter will throw.
+                    /// </exception>
+                    public string OutputDirectory
+                    {
+                        get
+                        {
+                            return m_outputDirectory;
+                        }
+
+                        set
+                        {
+                            m_outputDirectory = value;
+                            
+                            // Check if it's just a file name, if non-null/empty/whitespace.
+                            if(!string.IsNullOrEmpty(value) && !string.IsNullOrWhiteSpace(value))
+                            {
+                                var fName = Path.GetFullPath(value);
+
+                                Debug.Assert(fName.Equals(m_outputDirectory, StringComparison.OrdinalIgnoreCase), "Supplied output directory path must be absolute.");
+
+                                if(!fName.Equals(m_outputDirectory, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    throw new ArgumentException("Supplied output directory path must be absolute.");
+                                }
+                            }                            
+                        }
+                    }
+
+                    /// <summary>
                     /// Constructs a new AbstractCompilerTask object.
                     /// </summary>
                     /// <param name="scriptAbsolutePath">
@@ -618,6 +727,12 @@ namespace BuildBotCore
                         m_intermediaryDirectory = string.Empty;
                         m_libraryPaths = new List<string>();                        
                         m_additionalLibraries = new List<string>();
+                        m_linkerFlags = new List<string>();
+                        m_outputFileName = string.Empty;
+                        m_outputDirectory = string.Empty;
+
+                        // Don't copy includes by default.
+                        AutoCopyIncludes = false;
 
                         // Default string paths to false.
                         StrictPaths = false;                        

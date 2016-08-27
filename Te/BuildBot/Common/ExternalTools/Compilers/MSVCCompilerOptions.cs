@@ -69,20 +69,20 @@ namespace BuildBotCore
                         /// Catches both asynchronous and synchronous (C++)
                         /// exceptions.
                         /// </summary>
-                        a,
+                        a = 1,
 
                         /// <summary>
                         /// Catches C++ exceptions only an assumes extern "C"
                         /// functions can throw.
                         /// </summary>
-                        s,
+                        s = 2,
 
                         /// <summary>
                         /// If used with s (/EHsc), catches C++ exceptions only
                         /// and assumes that extern "C" declared functions will
                         /// never throw a C++ exception.
                         /// </summary>
-                        c,
+                        c = 4,
 
                         /// <summary>
                         /// Tells the compiler to always generate runtime
@@ -91,7 +91,7 @@ namespace BuildBotCore
                         /// optimize away runtime checks for noexcept functions
                         /// when it determines it safe to do see.
                         /// </summary>
-                        r
+                        r = 8
                     }
 
                     /// <summary>
@@ -145,7 +145,7 @@ namespace BuildBotCore
                         /// <summary>
                         /// Do not generate a listing file. Default.
                         ///</summary>
-                        None,
+                        None = 1,
 
                         /// <summary>
                         /// Assembly only, .asm extension. Default when only /FA is specified.
@@ -153,7 +153,7 @@ namespace BuildBotCore
                         /// <remarks>
                         /// Represents the /FA flag.
                         /// </remarks>
-                        Assembly,
+                        Assembly = 2,
 
                         /// <summary>
                         /// Machine and assembly, .cod extension.
@@ -161,7 +161,7 @@ namespace BuildBotCore
                         /// <remarks>
                         /// Represents the /FAc flag.
                         /// </remarks>
-                        AssemblyAndMachine,
+                        AssemblyAndMachine = 4,
 
                         /// <summary>
                         /// Source and assembly, .asm extension. However, if the
@@ -172,7 +172,7 @@ namespace BuildBotCore
                         /// <remarks>
                         /// Represents the /FAs flag.
                         /// </remarks>
-                        SourceAndAssembly,
+                        SourceAndAssembly = 8,
 
                         /// <summary>
                         /// Causes output to be created in UTF-8 format with a
@@ -184,7 +184,7 @@ namespace BuildBotCore
                         /// <remarks>
                         /// Represents the /FAu flag.
                         /// </remarks>
-                        Utf8
+                        Utf8 = 16
                     }
 
                     /// <summary>

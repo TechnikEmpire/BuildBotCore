@@ -45,12 +45,12 @@ namespace BuildBotCore
         /// <summary>
         /// Use x86 instruction set.
         /// </summary>
-        x86,
+        x86 = 1,
 
         /// <summary>
         /// Use x64 instruction set.
         /// </summary>
-        x64
+        x64 = 2
     }
 
     /// <summary>
@@ -62,12 +62,12 @@ namespace BuildBotCore
         /// <summary>
         /// Standard debug configuration.
         /// </summary>
-        Debug,
+        Debug = 1,
 
         /// <summary>
         /// Standard release configuration.
         /// </summary>
-        Release
+        Release = 2
     }
 
     /// <summary>
@@ -310,7 +310,7 @@ namespace BuildBotCore
         /// can throw this exception, so it should always be handled when
         /// invoking this method.
         /// </exception>
-        protected async void DownloadFile(Uri source, string targetDirectory,
+        protected static async void DownloadFile(Uri source, string targetDirectory,
             HttpTransactionProgressHandler downloadStatusReportHandler,
             string targetFileName = null, bool forceCreateDirectory = true)
         {
@@ -425,7 +425,7 @@ namespace BuildBotCore
         /// directory that does not exist, but forceCreateDirectory was
         /// explicitly set to false, this method will throw.
         /// </exception>
-        protected void DecompressArchive(string archivePath,
+        protected static void DecompressArchive(string archivePath,
             string decompressedPath, bool forceCreateDirectory = true)
         {
             // Enforce create directory if specified.
@@ -511,7 +511,7 @@ namespace BuildBotCore
         /// <returns>
         /// The exit code returned by the executed binary.
         /// </returns>
-        protected int RunProcess(string workingDirectory, string processName,
+        protected static int RunProcess(string workingDirectory, string processName,
             List<string> processArgs, int waitMillisections = Timeout.Infinite,
             IDictionary<string, string> environment = null,
             string processPath = null, DataReceivedEventHandler onStandardError = null,
@@ -537,9 +537,30 @@ namespace BuildBotCore
             p.StartInfo.WorkingDirectory = workingDirectory;
             p.StartInfo.FileName = procPathExists == false ? processName : processPath + Path.DirectorySeparatorChar + processName;
             p.StartInfo.CreateNoWindow = true;
-
+            p.StartInfo.UseShellExecute = false;
             p.StartInfo.RedirectStandardError = true;
             p.StartInfo.RedirectStandardOutput = true;
+
+            if (environment != null)
+            {
+                foreach (var key in environment.Keys)
+                {
+                    if (!p.StartInfo.Environment.ContainsKey(key))
+                    {
+                        p.StartInfo.Environment.Add(key, environment[key]);
+                    }
+                    else
+                    {
+                        // Overwrite if exists.
+                        p.StartInfo.Environment[key] = environment[key];
+                    }
+                }
+            }
+
+            foreach (var kp in p.StartInfo.Environment)
+            {
+                //Console.WriteLine(string.Format("{0} ::: {1}", kp.Key, kp.Value));
+            }
 
             if (onStandardError != null)
             {
@@ -566,6 +587,8 @@ namespace BuildBotCore
             }
 
             p.Start();
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
 
             if (waitMillisections != Timeout.Infinite)
             {
@@ -576,7 +599,90 @@ namespace BuildBotCore
                 p.WaitForExit();
             }
 
+            p.CancelOutputRead();
+            p.CancelErrorRead();
+
             return p.ExitCode;
+        }
+
+        /// <summary>
+        /// Copies the contents of one directory to another location. The
+        /// destination location will be created if it does not already exist.
+        /// </summary>
+        /// <param name="sourceDirectory">
+        /// The source directory from which to copy contents.
+        /// </param>
+        /// <param name="destinationDirectory">
+        /// The destination directory to copy the contents of the source
+        /// directory to.
+        /// </param>
+        /// <param name="recurive">
+        /// Whether or not the operation is recursive.
+        /// </param>
+        /// <param name="included">
+        /// A list of file names file extensions to be included in the copy.
+        /// Optional. Default is null. If non-null, the exclusion list will
+        /// override this. Also if non-null, and a file or its extension cannot
+        /// be found within this list, then it will not be copied regardless of
+        /// the exclusion list.
+        /// </param>
+        /// <param name="excluded">
+        /// A list of file names file extensions to be excluded in the copy.
+        /// Optional. Default is null.
+        /// </param>
+        /// <exception cref="ArgumentException">
+        /// In the event that the supplied source directory does not exist, this
+        /// method will throw.
+        /// </exception>     
+        protected static void CopyDirectory(string sourceDirectory, string destinationDirectory,
+            bool recurive, bool overwrite = true, HashSet<string> included = null, HashSet<string> excluded = null)
+        {
+            if (excluded == null)
+            {
+                excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            // Get the subdirectories for the specified directory.
+            DirectoryInfo dir = new DirectoryInfo(sourceDirectory);
+
+            if (!dir.Exists)
+            {
+                throw new DirectoryNotFoundException(string.Format("Source does not exist: {0}", sourceDirectory));
+            }
+
+            // Force destination directory creation.
+            Directory.CreateDirectory(destinationDirectory);
+
+            // Get all files in the source directory and copy them.
+            FileInfo[] files = dir.GetFiles();
+            foreach (FileInfo file in files)
+            {
+                // If files are not excluded, check to see if inclusion list
+                // exists. If it does exist and the file extension or name isn't
+                // on the list, then don't copy. If it doesn't exist, just copy.
+                if (!excluded.Contains(file.Extension) && !excluded.Contains(file.Name))
+                {
+                    if (included != null && (!included.Contains(file.Name) && !included.Contains(file.Extension)))
+                    {
+                        continue;
+                    }
+
+                    string temppath = Path.Combine(destinationDirectory, file.Name);
+                    file.CopyTo(temppath, overwrite);
+                }
+            }
+
+            // Repeat for all subdirs if recursive.
+            if (recurive)
+            {
+                DirectoryInfo[] subDirectories = dir.GetDirectories();
+
+                foreach (DirectoryInfo subdir in subDirectories)
+                {
+                    string temppath = Path.Combine(destinationDirectory, subdir.Name);
+                    CopyDirectory(subdir.FullName, temppath, recurive);
+                }
+            }
         }
     }
 }
