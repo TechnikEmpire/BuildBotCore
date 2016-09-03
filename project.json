@@ -1,6 +1,6 @@
 ﻿{
   "title": "BuildBotCore",
-  "version": "1.0.0-*",
+  "version": "1.1.0",
   "buildOptions": {
     "emitEntryPoint": false,
     "preserveCompilationContext": true,
@@ -17,10 +17,12 @@
     "System.Net.Requests": "4.0.11",
     "Microsoft.Extensions.PlatformAbstractions": "1.0.0",
     "System.Text.RegularExpressions": "4.1.0",
-    "CommandLineParser.Unofficial.CoreBeta": "2.1.0-beta"
+    "CommandLineParser.Unofficial.CoreBeta": "2.1.0-beta",
+    "System.Security.Cryptography.Hashing.Algorithms.Analyzers": "1.1.0",
+    "System.Security.Cryptography.Algorithms": "4.2.0"
   },
   "frameworks": {
-    "netstandard1.5": {
+    "netstandard1.6": {
       "buildOptions": {
         "preserveCompilationContext": true,
         "debugType": "portable"

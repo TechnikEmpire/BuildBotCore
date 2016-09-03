@@ -31,7 +31,10 @@ using System.Net.Http;
 using BuildBot.Net.Http.Handlers;
 using Microsoft.Extensions.PlatformAbstractions;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 using BuildBot.Extensions;
+using System.Threading.Tasks;
+using System.Net;
 
 namespace BuildBotCore
 {
@@ -310,12 +313,15 @@ namespace BuildBotCore
         /// can throw this exception, so it should always be handled when
         /// invoking this method.
         /// </exception>
-        protected static async void DownloadFile(Uri source, string targetDirectory,
-            HttpTransactionProgressHandler downloadStatusReportHandler,
+        protected static async Task DownloadFile(string source, string targetDirectory,
+            HttpTransactionProgressHandler downloadStatusReportHandler = null,
             string targetFileName = null, bool forceCreateDirectory = true)
         {
+            Console.WriteLine(string.Format("Downloading file to {0}", targetDirectory));
+
             HttpClientHandler clientHandler = new HttpClientHandler();
             clientHandler.ClientCertificateOptions = ClientCertificateOption.Automatic;
+            clientHandler.AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip;
 
             targetDirectory = targetDirectory.ConvertToHostOsPath();
 
@@ -328,9 +334,15 @@ namespace BuildBotCore
 
             Debug.Assert(Directory.Exists(targetDirectory) || (!Directory.Exists(targetDirectory) && forceCreateDirectory == true), "Target directory does not exist and forcing its creation was explicitly disallowed.");
 
-            if (!Directory.Exists(targetDirectory) && forceCreateDirectory == false)
+            if (!Directory.Exists(targetDirectory))
             {
-                throw new ArgumentException("Supplied target directory does not exist, yet force create directory was explicitly set to false.", nameof(targetDirectory));
+                if (forceCreateDirectory == false)
+                {
+                    // This is impossible.
+                    throw new ArgumentException("Supplied target directory does not exist, yet force create directory was explicitly set to false.", nameof(targetDirectory));
+                }
+
+                Directory.CreateDirectory(targetDirectory);
             }
 
             // Determine if a file name was supplied to this function or not.
@@ -338,6 +350,8 @@ namespace BuildBotCore
 
             using (var httpClient = new HttpClient(clientHandler))
             {
+                // XXX TODO - Add accept/user agent headers?
+
                 // Get the response with headers read in, but not the content.
                 var responseMessage = await httpClient.GetAsync(source, HttpCompletionOption.ResponseHeadersRead);
 
@@ -352,6 +366,10 @@ namespace BuildBotCore
                             targetFileName = dFileName;
                             hasFilename = true;
                         }
+                    }
+                    else
+                    {
+                        Console.WriteLine("No content disposition header.");
                     }
                 }
 
@@ -370,6 +388,23 @@ namespace BuildBotCore
                 }
 
                 ulong totalBytesRead = 0;
+
+                if (downloadStatusReportHandler == null)
+                {
+                    downloadStatusReportHandler = (received, total) =>
+                    {
+                        if (total > 0)
+                        {
+                            Console.Write("\rDownload progress: {0}%", Math.Round(((float)received / (float)total) * 100, 2));                            
+                        }
+                        else
+                        {
+                            Console.Write("\rDownloaded {0} bytes of unknown.", received);
+                        }
+                    };
+                }               
+
+                Console.WriteLine(string.Format("Full download location: {0}", targetDirectory + Path.DirectorySeparatorChar + targetFileName));
 
                 using (var destinationFileStream = File.Create(targetDirectory + Path.DirectorySeparatorChar + targetFileName))
                 {
@@ -390,6 +425,10 @@ namespace BuildBotCore
                     }
                 }
             }
+
+            // Since we may have been writing progress data to
+            // the console, force a newline here.
+            Console.WriteLine();
         }
 
         /// <summary>
@@ -401,6 +440,10 @@ namespace BuildBotCore
         /// </param>
         /// <param name="decompressedPath">
         /// The path to expand the archive into.
+        /// </param>
+        /// <param name="verbose">
+        /// Whether or not to print information about the extraction to the
+        /// console.
         /// </param>
         /// <param name="forceCreateDirectory">
         /// Whether or not to force the creation of the target decompression
@@ -426,7 +469,7 @@ namespace BuildBotCore
         /// explicitly set to false, this method will throw.
         /// </exception>
         protected static void DecompressArchive(string archivePath,
-            string decompressedPath, bool forceCreateDirectory = true)
+            string decompressedPath, bool verbose = false, bool forceCreateDirectory = true)
         {
             // Enforce create directory if specified.
             if (forceCreateDirectory)
@@ -458,14 +501,31 @@ namespace BuildBotCore
             }
 
             var archive = ArchiveFactory.Open(archivePath);
+
+            Console.WriteLine(string.Format("Decompressing archive {0} ...", Path.GetFileName(archivePath)));
+
+            int current = 0;
+            int total = archive.Entries.Count();
             foreach (var entry in archive.Entries)
             {
                 if (!entry.IsDirectory)
                 {
-                    Console.WriteLine(entry.Key);
+                    ++current;
+                    if(verbose)
+                    {
+                        Console.WriteLine(string.Format("Extracting file: {0}", (decompressedPath + Path.DirectorySeparatorChar + entry.Key).ConvertToHostOsPath()));
+                    }
+                    else
+                    {
+                        Console.Write("\rDecompression progress: {0}%", Math.Round(((float)current / (float)total) * 100, 2));
+                    }
+                    
                     entry.WriteToDirectory(decompressedPath, ExtractOptions.ExtractFullPath | ExtractOptions.Overwrite);
                 }
             }
+
+            // Clear the previous overwritten line.
+            Console.WriteLine();
         }
 
         /// <summary>
@@ -683,6 +743,154 @@ namespace BuildBotCore
                     CopyDirectory(subdir.FullName, temppath, recurive);
                 }
             }
+        }
+
+        /// <summary>
+        /// Checks whether or not the file at the supplied path matches the
+        /// expected hash.
+        /// </summary>
+        /// <param name="algorithmName">
+        /// The name of the algorithm to use.
+        /// </param>
+        /// <param name="filePath">
+        /// The path to the file to hash.
+        /// </param>
+        /// <param name="expectedHash">
+        /// The expected hash of the file at the supplied path.
+        /// </param>
+        /// <returns>
+        /// True if the file was found and it's hash matched the expected value.
+        /// False otherwise. False also may be an indication that the file
+        /// simply did not exist.
+        /// </returns>
+        /// <exception cref="ArgumentException">
+        /// In the event that algorithmName is null, this method will throw.
+        ///
+        /// In the event that the algorithm identified by the given name is not
+        /// supported, this method will throw.
+        ///
+        /// In the event that either the filePath or expectedHash arguments are
+        /// null, whitespace or empty strings, this method will throw.
+        /// </exception>
+        public static bool VerifyFileHash(HashAlgorithmName algorithmName, string filePath, string expectedHash)
+        {
+
+            Debug.Assert(algorithmName != null, "Supplied HashAlgorithmName cannot be null.");
+
+            Debug.Assert(!string.IsNullOrEmpty(filePath) && !string.IsNullOrWhiteSpace(filePath), "Supplied file path cannot be null, empty or whitespace.");
+
+            Debug.Assert(!string.IsNullOrEmpty(expectedHash) && !string.IsNullOrWhiteSpace(expectedHash), "Supplied hash cannot be null, empty or whitespace.");
+
+            if(algorithmName == null)
+            {
+                throw new ArgumentException("Supplied HashAlgorithmName cannot be null.", nameof(algorithmName));
+            }
+
+            if (string.IsNullOrEmpty(filePath) || string.IsNullOrWhiteSpace(filePath))
+            {
+                throw new ArgumentException("Supplied file path cannot be null, empty or whitespace.", nameof(filePath));
+            }
+
+            if (string.IsNullOrEmpty(expectedHash) || string.IsNullOrWhiteSpace(expectedHash))
+            {
+                throw new ArgumentException("Supplied hash cannot be null, empty or whitespace.", nameof(expectedHash));
+            }
+
+            // Just return false if the file doesn't exist.
+            if (!File.Exists(filePath))
+            {
+                return false;
+            }
+
+            HashAlgorithm algo = null;
+
+            try
+            {
+                switch (algorithmName.Name)
+                {
+                    case nameof(HashAlgorithmName.MD5):
+                        {
+                            algo = MD5.Create();
+                        }
+                        break;
+
+                    case nameof(HashAlgorithmName.SHA1):
+                        {
+                            algo = SHA1.Create();
+                        }
+                        break;
+
+                    case nameof(HashAlgorithmName.SHA256):
+                        {
+                            algo = SHA256.Create();
+                        }
+                        break;
+
+                    case nameof(HashAlgorithmName.SHA384):
+                        {
+                            algo = SHA384.Create();
+                        }
+                        break;
+
+                    case nameof(HashAlgorithmName.SHA512):
+                        {
+                            algo = SHA512.Create();
+                        }
+                        break;
+
+                    default:
+                        throw new ArgumentException("Specified hash algorithm is unsupported.", nameof(algorithmName));
+                }
+
+                algo.Initialize();
+
+                using (var file = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+                {
+                    var hash = BitConverter.ToString(algo.ComputeHash(file)).Replace("-","");
+
+                    return hash.Equals(expectedHash, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            finally
+            {
+                if (algo != null)
+                {
+                    algo.Dispose();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Writes the given string to the console, followed by a new line.
+        /// </summary>
+        /// <param name="message">
+        /// The text to write to the console.
+        /// </param>
+        /// <remarks>
+        /// These methods are temporary until the type collisions caused by the
+        /// inclusion of the private mscorlib in dynamic script compilation are
+        /// resolved alternative. XXX TODO.
+        /// </remarks>
+        public static void WriteLineToConsole(string message)
+        {
+            WriteToConsole(message);
+            WriteToConsole(Environment.NewLine);
+        }
+
+        /// <summary>
+        /// Writes the given string to the console.
+        /// </summary>
+        /// <param name="message">
+        /// The text to write to the console.
+        /// </param>
+        /// <remarks>
+        /// These methods are temporary until the type collisions caused by the
+        /// inclusion of the private mscorlib in dynamic script compilation are
+        /// resolved alternative. XXX TODO.
+        /// </remarks>
+        public static void WriteToConsole(string message)
+        {
+            Console.Write(message);
         }
     }
 }

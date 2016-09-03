@@ -50,6 +50,26 @@ namespace BuildBotCore
                 {
 
                     /// <summary>
+                    /// Some default release flags common to all project types.
+                    /// </summary>
+                    public static readonly List<string> DefaultReleaseCompilerFlags = new List<string>()
+                    {
+                        "/Ox",
+                        "/Oi",
+                        "/Ot",
+                        "/GF",
+                        "/fp:fast"
+                    };
+
+                    /// <summary>
+                    /// Some common debug flags common to all project types.
+                    /// </summary>
+                    public static readonly List<string> DefaultDebugCompilerFlags = new List<string>()
+                    {
+                        "/Od"
+                    };
+
+                    /// <summary>
                     /// Represents various Visual Studio versions where we'll look to invoke
                     /// cl.exe.
                     /// </summary>
@@ -229,8 +249,14 @@ namespace BuildBotCore
                         // is because the user might have specified non-target, non-plat
                         // specific flags, which we want to apply after we clear/reset
                         // them ever time we compile for a config.
-                        var defaultCompilerFlags = new List<string>(CompilerFlags.ToArray());
-                        var defaultLinkerFlags = new List<string>(LinkerFlags.ToArray());
+                        var originalGlobalCompilerFlags = new List<string>(GlobalCompilerFlags);
+                        var originalGlobalLinkerFlags = new List<string>(GlobalLinkerFlags);
+
+                        var originalReleaseCompilerFlags = new List<string>(ReleaseCompilerFlags);
+                        var originalDebugCompilerFlags = new List<string>(DebugCompilerFlags);
+
+                        var originalReleaseLinkerFlags = new List<string>(ReleaseLinkerFlags);
+                        var originalDebugLinkerFlags = new List<string>(DebugLinkerFlags);
 
                         // Keep track of number of configs/archs we build for. Use
                         // these counts to determine success.
@@ -253,9 +279,29 @@ namespace BuildBotCore
 
                                         Console.WriteLine(string.Format("Running MSVC Compilation for config: {0} and arch: {1}.", cfg.ToString(), a.ToString()));
 
-                                        // Clone default flags.
-                                        CompilerFlags = new List<string>(defaultCompilerFlags.ToArray());
-                                        LinkerFlags = new List<string>(defaultLinkerFlags.ToArray());
+                                        // Reset flags to defaults.
+                                        GlobalCompilerFlags = new List<string>(originalGlobalCompilerFlags);
+                                        GlobalLinkerFlags = new List<string>(originalGlobalLinkerFlags);
+                                        ReleaseCompilerFlags = new List<string>(originalReleaseCompilerFlags);
+                                        DebugCompilerFlags = new List<string>(originalDebugCompilerFlags);
+                                        ReleaseLinkerFlags = new List<string>(originalReleaseLinkerFlags);
+                                        DebugLinkerFlags = new List<string>(originalDebugLinkerFlags);
+
+                                        // Add debug/release flags depending on current CFG.
+                                        switch (cfg)
+                                        {
+                                            case BuildConfiguration.Debug:
+                                                {
+                                                    GlobalCompilerFlags = GlobalCompilerFlags.Concat(DebugCompilerFlags).ToList();
+                                                }
+                                                break;
+
+                                            case BuildConfiguration.Release:
+                                                {
+                                                    GlobalCompilerFlags = GlobalCompilerFlags.Concat(ReleaseCompilerFlags).ToList();
+                                                }
+                                                break;
+                                        }
 
                                         // Build intermediary directory
                                         string fullIntermediaryDir = string.Empty;
@@ -287,25 +333,25 @@ namespace BuildBotCore
                                         // Set the intermediary output directory. We use a trailing slash
                                         // here because if we don't, the params won't parse properly when
                                         // passed to CL.exe.
-                                        CompilerFlags.Add(string.Format("/Fo\"{0}/\"", fullIntermediaryDir));
+                                        GlobalCompilerFlags.Add(string.Format("/Fo\"{0}/\"", fullIntermediaryDir));
 
                                         switch (a)
                                         {
                                             case Architecture.x86:
                                                 {
-                                                    LinkerFlags.Add("/MACHINE:x86");
+                                                    GlobalLinkerFlags.Add("/MACHINE:x86");
                                                 }
                                                 break;
 
                                             case Architecture.x64:
                                                 {
-                                                    LinkerFlags.Add("/MACHINE:x64");
+                                                    GlobalLinkerFlags.Add("/MACHINE:x64");
                                                 }
                                                 break;
                                         }
 
                                         // Whether we're merging the link command.
-                                        bool mergedLink = false;
+                                        bool isStaticLibrary = false;
 
                                         // Setup final output path. Create it first.
                                         Directory.CreateDirectory(configArchOutDir);
@@ -323,12 +369,12 @@ namespace BuildBotCore
                                             case AssemblyType.SharedLibrary:
                                                 {
                                                     // Define User/Win DLL.
-                                                    CompilerFlags.Add("/D_USRDLL");
-                                                    CompilerFlags.Add("/D_WINDLL");
+                                                    GlobalCompilerFlags.Add("/D_USRDLL");
+                                                    GlobalCompilerFlags.Add("/D_WINDLL");
 
-                                                    LinkerFlags.Add("/DLL");
+                                                    GlobalLinkerFlags.Add("/DLL");
 
-                                                    mergedLink = true;
+                                                    isStaticLibrary = true;
 
                                                     // Add appropriate file extension.
                                                     finalOutputPath += ".dll";
@@ -338,9 +384,9 @@ namespace BuildBotCore
                                             case AssemblyType.StaticLibrary:
                                                 {
                                                     // /c flag means don't link
-                                                    if (!CompilerFlags.Contains("/c"))
+                                                    if (!GlobalCompilerFlags.Contains("/c"))
                                                     {
-                                                        CompilerFlags.Add("/c");
+                                                        GlobalCompilerFlags.Add("/c");
                                                     }
 
                                                     // Add appropriate file extension.
@@ -350,7 +396,7 @@ namespace BuildBotCore
 
                                             case AssemblyType.Executable:
                                                 {
-                                                    mergedLink = true;
+                                                    isStaticLibrary = true;
 
                                                     // Add appropriate file extension.
                                                     finalOutputPath += ".exe";
@@ -359,10 +405,26 @@ namespace BuildBotCore
                                         }
 
                                         // Specify full output path. Spaces escaped later.
-                                        LinkerFlags.Add(string.Format("/OUT:\"{0}\"", finalOutputPath));
+                                        GlobalLinkerFlags.Add(string.Format("/OUT:\"{0}\"", finalOutputPath));
+
+                                        // Add debug/release flags to linker depending on current CFG.
+                                        switch (cfg)
+                                        {
+                                            case BuildConfiguration.Debug:
+                                                {
+                                                    GlobalLinkerFlags = GlobalLinkerFlags.Concat(DebugLinkerFlags).ToList();
+                                                }
+                                                break;
+
+                                            case BuildConfiguration.Release:
+                                                {
+                                                    GlobalLinkerFlags = GlobalLinkerFlags.Concat(ReleaseLinkerFlags).ToList();
+                                                }
+                                                break;
+                                        }
 
                                         // Clone compile flags.
-                                        var finalArgs = new List<string>(CompilerFlags);
+                                        var finalArgs = new List<string>(GlobalCompilerFlags);
 
                                         // Append includes.
                                         foreach (var inclPath in IncludePaths)
@@ -375,11 +437,30 @@ namespace BuildBotCore
                                         // Append sources.
                                         finalArgs = finalArgs.Concat(Sources).ToList();
 
-                                        if (mergedLink)
+                                        if (isStaticLibrary)
                                         {
                                             // Add linker call if applicable.                           
                                             finalArgs.Add("/link");
-                                            finalArgs = finalArgs.Concat(LinkerFlags).ToList();
+                                            finalArgs = finalArgs.Concat(GlobalLinkerFlags).ToList();
+                                        }
+                                        else
+                                        {
+                                            // Add debug/release DLL flags depending on current CFG.
+                                            // Shared runtime, as long as this isn't a static lib.
+                                            switch (cfg)
+                                            {
+                                                case BuildConfiguration.Debug:
+                                                    {
+                                                        finalArgs.Add("/MDd");
+                                                    }
+                                                    break;
+
+                                                case BuildConfiguration.Release:
+                                                    {
+                                                        finalArgs.Add("/MD");
+                                                    }
+                                                    break;
+                                            }
                                         }
 
                                         // Run compiler.
@@ -407,7 +488,7 @@ namespace BuildBotCore
                                         int compileReturnCode = RunProcess(WorkingDirectory, clExe, finalArgs, Timeout.Infinite, envVars);
 
                                         // If no auto linking, run LIB.
-                                        if (!mergedLink && compileReturnCode == 0)
+                                        if (!isStaticLibrary && compileReturnCode == 0)
                                         {
                                             // Basically means static library. So, we need to run
                                             // LIB tool.
@@ -442,7 +523,7 @@ namespace BuildBotCore
                                                 finalLibArgs.Add(string.Format("\"{0}\"", objFile));
                                             }
 
-                                            foreach (var linkerArg in LinkerFlags)
+                                            foreach (var linkerArg in GlobalLinkerFlags)
                                             {
                                                 // Add all linker args with escaped spaces.
                                                 finalLibArgs.Add(linkerArg);
@@ -498,7 +579,7 @@ namespace BuildBotCore
 
                                             foreach (var includePath in IncludePaths)
                                             {
-                                                CopyDirectory(includePath, OutputDirectory + Path.DirectorySeparatorChar + "Include", true, true, null, exclusions);
+                                                CopyDirectory(includePath, OutputDirectory + Path.DirectorySeparatorChar + "include", true, true, null, exclusions);
                                             }
                                         }
                                     }

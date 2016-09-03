@@ -84,14 +84,34 @@ namespace BuildBotCore
                     private List<string> m_includePaths;
 
                     /// <summary>
-                    /// Private data member for the public CompilerFlags property.
+                    /// Private data member for the public GlobalCompilerFlags property.
                     /// </summary>
-                    private List<string> m_compilerFlags;
+                    private List<string> m_globalCompilerFlags;
 
                     /// <summary>
-                    /// Private data member for the public LinkerFlags property.
+                    /// Private data member for the public ReleaseCompilerFlags property.
                     /// </summary>
-                    private List<string> m_linkerFlags;
+                    private List<string> m_releaseCompilerFlags;
+
+                    /// <summary>
+                    /// Private data member for the public DebugCompilerFlags property.
+                    /// </summary>
+                    private List<string> m_debugCompilerFlags;
+
+                    /// <summary>
+                    /// Private data member for the public GlobalLinkerFlags property.
+                    /// </summary>
+                    private List<string> m_globalLinkerFlags;
+
+                    /// <summary>
+                    /// Private data member for the public ReleaseLinkerFlags property.
+                    /// </summary>
+                    private List<string> m_releaseLinkerFlags;
+
+                    /// <summary>
+                    /// Private data member for the public DebugLinkerFlags property.
+                    /// </summary>
+                    private List<string> m_debugLinkerFlags;
 
                     /// <summary>
                     /// Private data member for the public IntermediaryDirectory property.
@@ -448,46 +468,140 @@ namespace BuildBotCore
 
                     /// <summary>
                     /// Gets or sets flags that should be supplied to the
-                    /// compiler during compilation.
+                    /// compiler during compilation, regardless of configuration
+                    /// and target architecture.
                     /// </summary>
-                    public List<string> CompilerFlags
+                    public List<string> GlobalCompilerFlags
                     {
                         get
                         {
-                            return m_compilerFlags;
+                            return m_globalCompilerFlags;
                         }
 
                         set
                         {
-                            m_compilerFlags = value;
+                            m_globalCompilerFlags = value;
 
                             // Silently enforce non-null, but rather empty.
-                            if (m_compilerFlags == null)
+                            if (m_globalCompilerFlags == null)
                             {
-                                m_compilerFlags = new List<string>();
+                                m_globalCompilerFlags = new List<string>();
                             }
                         }
                     }
 
                     /// <summary>
                     /// Gets or sets flags that should be supplied to the
-                    /// compiler during compilation.
+                    /// compiler during release compilation.
                     /// </summary>
-                    public List<string> LinkerFlags
+                    public List<string> ReleaseCompilerFlags
                     {
                         get
                         {
-                            return m_linkerFlags;
+                            return m_releaseCompilerFlags;
                         }
 
                         set
                         {
-                            m_linkerFlags = value;
+                            m_releaseCompilerFlags = value;
 
                             // Silently enforce non-null, but rather empty.
-                            if (m_linkerFlags == null)
+                            if (m_releaseCompilerFlags == null)
                             {
-                                m_linkerFlags = new List<string>();
+                                m_releaseCompilerFlags = new List<string>();
+                            }
+                        }
+                    }
+
+                    /// <summary>
+                    /// Gets or sets flags that should be supplied to the
+                    /// compiler during debug compilation.
+                    /// </summary>
+                    public List<string> DebugCompilerFlags
+                    {
+                        get
+                        {
+                            return m_debugCompilerFlags;
+                        }
+
+                        set
+                        {
+                            m_debugCompilerFlags = value;
+
+                            // Silently enforce non-null, but rather empty.
+                            if (m_debugCompilerFlags == null)
+                            {
+                                m_debugCompilerFlags = new List<string>();
+                            }
+                        }
+                    }
+
+                    /// <summary>
+                    /// Gets or sets flags that should be supplied to the
+                    /// linker during compilation, regardless of configuration
+                    /// and target architecture.
+                    /// </summary>
+                    public List<string> GlobalLinkerFlags
+                    {
+                        get
+                        {
+                            return m_globalLinkerFlags;
+                        }
+
+                        set
+                        {
+                            m_globalLinkerFlags = value;
+
+                            // Silently enforce non-null, but rather empty.
+                            if (m_globalLinkerFlags == null)
+                            {
+                                m_globalLinkerFlags = new List<string>();
+                            }
+                        }
+                    }
+
+                    /// <summary>
+                    /// Gets or sets flags that should be supplied to the
+                    /// linker during compilation.
+                    /// </summary>
+                    public List<string> ReleaseLinkerFlags
+                    {
+                        get
+                        {
+                            return m_releaseLinkerFlags;
+                        }
+
+                        set
+                        {
+                            m_releaseLinkerFlags = value;
+
+                            // Silently enforce non-null, but rather empty.
+                            if (m_releaseLinkerFlags == null)
+                            {
+                                m_releaseLinkerFlags = new List<string>();
+                            }
+                        }
+                    }
+
+                    /// <summary>
+                    /// Gets or sets flags that should be supplied to the
+                    /// linker during compilation.
+                    /// </summary>
+                    public List<string> DebugLinkerFlags
+                    {
+                        get
+                        {
+                            return  m_debugLinkerFlags;
+                        }
+
+                        set
+                        {
+                            m_debugLinkerFlags = value;
+
+                            // Silently enforce non-null, but rather empty.
+                            if (m_debugLinkerFlags == null)
+                            {
+                                m_debugLinkerFlags = new List<string>();
                             }
                         }
                     }
@@ -722,12 +836,21 @@ namespace BuildBotCore
                     public AbstractCompilerTask(string scriptAbsolutePath) : base(scriptAbsolutePath)
                     {
                         // Init private property data holders.
-                        m_compilerFlags = new List<string>();
+
+                        // XXX TODO - This global/debug/release stuff is ugly.
+                        m_globalCompilerFlags = new List<string>();
+                        m_releaseCompilerFlags = new List<string>();
+                        m_debugCompilerFlags = new List<string>();
+                        
                         m_includePaths = new List<string>();
                         m_intermediaryDirectory = string.Empty;
                         m_libraryPaths = new List<string>();                        
                         m_additionalLibraries = new List<string>();
-                        m_linkerFlags = new List<string>();
+                        
+                        m_globalLinkerFlags = new List<string>();
+                        m_releaseLinkerFlags = new List<string>();
+                        m_debugLinkerFlags = new List<string>();
+                        
                         m_outputFileName = string.Empty;
                         m_outputDirectory = string.Empty;
 
