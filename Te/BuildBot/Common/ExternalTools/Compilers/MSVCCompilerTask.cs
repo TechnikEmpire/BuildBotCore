@@ -213,9 +213,7 @@ namespace BuildBotCore
                         Errors.Clear();
 
                         // First thing is to ensure that an acceptable version of MSVC is installed.
-                        var installedVcVersions = GetInstalledToolVersions();
-
-                        if (!installedVcVersions.ContainsKey(MinimumRequiredToolVersion))
+                        if (!InstalledToolVersions.ContainsKey(MinimumRequiredToolVersion))
                         {
                             Errors.Add(new Exception(string.Format("An installation of MSVC meeting the minimum required version of {0} could not be found.", MinimumRequiredToolVersion.ToString())));
                             return false;
@@ -320,7 +318,7 @@ namespace BuildBotCore
                                         fullIntermediaryDir = fullIntermediaryDir + Path.DirectorySeparatorChar + string.Format("{0} {1}", cfg.ToString(), a.ToString());
 
                                         // Now we need the ENV vars for our tool version.
-                                        var envVars = GetEnvironmentVariables(MinimumRequiredToolVersion, installedVcVersions[MinimumRequiredToolVersion], a);
+                                        var envVars = GetEnvironmentForVersion(MinimumRequiredToolVersion, a);
 
                                         // Force creation of intermediaries directory.
                                         Directory.CreateDirectory(fullIntermediaryDir);
@@ -604,64 +602,84 @@ namespace BuildBotCore
                     /// enum, and the values are the path to the cl.exe bin directory
                     /// where the version install was discovered.
                     /// </returns>
-                    private Dictionary<ToolVersions, string> GetInstalledToolVersions()
+                    public static Dictionary<ToolVersions, string> InstalledToolVersions
                     {
 
-                        var installedVersions = new Dictionary<ToolVersions, string>();
-
-                        foreach (ToolVersions toolVer in Enum.GetValues(typeof(ToolVersions)))
+                        get
                         {
+                            var installedVersions = new Dictionary<ToolVersions, string>();
 
-                            // Check to see if there's an environmental variable for each
-                            // version of Visual Studio we list.
-                            var vIntString = Regex.Replace(toolVer.ToString(), "[^0-9]+", string.Empty);
-
-                            var commonPath = Environment.GetEnvironmentVariable(string.Format("VS{0}0COMNTOOLS", vIntString));
-
-                            if (!string.IsNullOrEmpty(commonPath) && !string.IsNullOrWhiteSpace(commonPath))
+                            foreach (ToolVersions toolVer in Enum.GetValues(typeof(ToolVersions)))
                             {
-                                // Example path here is:
-                                // C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\Tools\                                
-                                int commonPosition = commonPath.IndexOf("\\Common7");
 
-                                if (commonPosition != -1)
+                                // Check to see if there's an environmental variable for each
+                                // version of Visual Studio we list.
+                                var vIntString = Regex.Replace(toolVer.ToString(), "[^0-9]+", string.Empty);
+
+                                var commonPath = Environment.GetEnvironmentVariable(string.Format("VS{0}0COMNTOOLS", vIntString));
+
+                                if (!string.IsNullOrEmpty(commonPath) && !string.IsNullOrWhiteSpace(commonPath))
                                 {
-                                    // Find out if the installation directory has the C/C++ compiler present.
-                                    // If so, we'll include this version in our returned collection.
-                                    commonPath = commonPath.Substring(0, commonPosition).ConvertToHostOsPath();
+                                    // Example path here is:
+                                    // C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\Tools\                                
+                                    int commonPosition = commonPath.IndexOf("\\Common7");
 
-                                    var vcBinDir = commonPath + Path.DirectorySeparatorChar + "VC" + Path.DirectorySeparatorChar + "bin";
-
-                                    var clPath = vcBinDir + Path.DirectorySeparatorChar + "cl.exe";
-                                    if (File.Exists(clPath))
+                                    if (commonPosition != -1)
                                     {
-                                        installedVersions.Add(toolVer, vcBinDir);
+                                        // Find out if the installation directory has the C/C++ compiler present.
+                                        // If so, we'll include this version in our returned collection.
+                                        commonPath = commonPath.Substring(0, commonPosition).ConvertToHostOsPath();
+
+                                        var vcBinDir = commonPath + Path.DirectorySeparatorChar + "VC" + Path.DirectorySeparatorChar + "bin";
+
+                                        var clPath = vcBinDir + Path.DirectorySeparatorChar + "cl.exe";
+                                        if (File.Exists(clPath))
+                                        {
+                                            installedVersions.Add(toolVer, vcBinDir);
+                                        }
                                     }
                                 }
                             }
+
+                            return installedVersions;
                         }
-
-
-                        return installedVersions;
                     }
 
                     /// <summary>
                     /// Gets a case-insensitive dictionary containing the
                     /// correct environmental variables for the supplied tool
                     /// version and target architecture.
-                    /// </summary>
+                    /// </summary>                    
+                    /// <param name="version">
+                    /// The toolset version to fetch the environment for.
+                    /// </param>
+                    /// <param name="arch">
+                    /// The architecture to set when fetching the environment.
+                    /// </param>
                     /// <returns>
-                    /// A dictionary containing the correct environmental
-                    /// variables for the supplied tool version and target
-                    /// architecture.
+                    /// A case-insensitive dictionary containing the correct
+                    /// environmental variables for the supplied tool version
+                    /// and target architecture. In the event that the requested
+                    /// version is not found, returns an empty collection.
                     /// </returns>
                     /// <exception cref="ArgumentException">
                     /// The arch parameter must have one and only one arch flag
                     /// set. In the event that this is not the case, this method
                     /// will throw/
                     /// </exception>
-                    private Dictionary<string, string> GetEnvironmentVariables(ToolVersions version, string clBinPath, Architecture arch)
+                    public static Dictionary<string, string> GetEnvironmentForVersion(ToolVersions version, Architecture arch)
                     {
+
+                        var installedVersions = InstalledToolVersions;
+
+                        if(!installedVersions.ContainsKey(version))
+                        {  
+                            // Requested version not found.
+                            return new Dictionary<string, string>();
+                        }
+
+                        var clBinPath = installedVersions[version];
+
                         // Ensure we only have one flag for arch.                        
                         int setFlags = 0;
                         foreach (Architecture a in Enum.GetValues(typeof(Architecture)))
@@ -737,7 +755,7 @@ namespace BuildBotCore
 
                         // Once we run cmd.exe with the above args, we'll have captured all environmental
                         // variables required to run the compiler tools manually for the target architecture.
-                        var exitCode = RunProcess(WorkingDirectory, "cmd.exe", new List<string> { callArgs }, Timeout.Infinite, null, null, stdErr, stdOut);
+                        var exitCode = RunProcess(string.Empty, "cmd.exe", new List<string> { callArgs }, Timeout.Infinite, null, null, stdErr, stdOut);
 
                         Debug.Assert(exitCode >= 0, string.Format("When trying to load MSVC dev environment for arch {0}, the process returned an error code.", arch));
 

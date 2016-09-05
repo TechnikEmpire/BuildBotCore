@@ -395,11 +395,11 @@ namespace BuildBotCore
                     {
                         if (total > 0)
                         {
-                            Console.Write("\rDownload progress: {0}%", Math.Round(((float)received / (float)total) * 100, 2));                            
+                            Console.Write(string.Format("\rDownload progress: {0}%", Math.Round(((float)received / (float)total) * 100, 2)));                            
                         }
                         else
                         {
-                            Console.Write("\rDownloaded {0} bytes of unknown.", received);
+                            Console.Write(string.Format("\rDownloaded {0} bytes of unknown.", received));
                         }
                     };
                 }               
@@ -428,7 +428,7 @@ namespace BuildBotCore
 
             // Since we may have been writing progress data to
             // the console, force a newline here.
-            Console.WriteLine();
+            Console.WriteLine(string.Empty);
         }
 
         /// <summary>
@@ -517,7 +517,7 @@ namespace BuildBotCore
                     }
                     else
                     {
-                        Console.Write("\rDecompression progress: {0}%", Math.Round(((float)current / (float)total) * 100, 2));
+                        Console.Write(string.Format("\rDecompression progress: {0}%", Math.Round(((float)current / (float)total) * 100, 2)));
                     }
                     
                     entry.WriteToDirectory(decompressedPath, ExtractOptions.ExtractFullPath | ExtractOptions.Overwrite);
@@ -525,7 +525,7 @@ namespace BuildBotCore
             }
 
             // Clear the previous overwritten line.
-            Console.WriteLine();
+            Console.WriteLine(string.Empty);
         }
 
         /// <summary>
@@ -593,13 +593,13 @@ namespace BuildBotCore
             }
 
             Process p = new Process();
-            p.StartInfo.Arguments = string.Join(" ", processArgs);
-            p.StartInfo.WorkingDirectory = workingDirectory;
+            p.StartInfo.Arguments = string.Join(" ", processArgs);            
             p.StartInfo.FileName = procPathExists == false ? processName : processPath + Path.DirectorySeparatorChar + processName;
             p.StartInfo.CreateNoWindow = true;
             p.StartInfo.UseShellExecute = false;
             p.StartInfo.RedirectStandardError = true;
             p.StartInfo.RedirectStandardOutput = true;
+            var sd = p.StartInfo.WorkingDirectory = workingDirectory;
 
             if (environment != null)
             {
@@ -630,7 +630,11 @@ namespace BuildBotCore
             {
                 p.ErrorDataReceived += ((sender, e) =>
                 {
-                    Console.WriteLine(e.Data);
+                    // Only write non-null, non-whitespace.
+                    if(!string.IsNullOrEmpty(e.Data) && !string.IsNullOrWhiteSpace(e.Data))
+                    {
+                        Console.WriteLine(e.Data);
+                    }
                 });
             }
 
@@ -642,7 +646,11 @@ namespace BuildBotCore
             {
                 p.OutputDataReceived += ((sender, e) =>
                 {
-                    Console.WriteLine(e.Data);
+                    // Only write non-null, non-whitespace.
+                    if(!string.IsNullOrEmpty(e.Data) && !string.IsNullOrWhiteSpace(e.Data))
+                    {
+                        Console.WriteLine(e.Data);
+                    }
                 });
             }
 
