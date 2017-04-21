@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <AssemblyTitle>BuildBotCore</AssemblyTitle>
+    <VersionPrefix>1.1.0</VersionPrefix>
+    <TargetFramework>netstandard1.6</TargetFramework>
+    <DebugType>portable</DebugType>
+    <PreserveCompilationContext>true</PreserveCompilationContext>
+    <AssemblyName>BuildBotCore</AssemblyName>
+    <OutputType>Library</OutputType>
+    <PackageId>BuildBotCore</PackageId>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Runtime" Version="4.1.0" />
+    <PackageReference Include="System.Runtime.Loader" Version="4.0.0" />
+    <PackageReference Include="Microsoft.NETCore.Portable.Compatibility" Version="1.0.1" />
+    <PackageReference Include="NETStandard.Library" Version="1.6.0" />
+    <PackageReference Include="SharpCompress" Version="0.12.4" />
+    <PackageReference Include="System.Diagnostics.Process" Version="4.1.0" />
+    <PackageReference Include="System.Net.Http" Version="4.1.1" />
+    <PackageReference Include="System.Net.Requests" Version="4.0.11" />
+    <PackageReference Include="Microsoft.Extensions.PlatformAbstractions" Version="1.0.0" />
+    <PackageReference Include="System.Text.RegularExpressions" Version="4.1.0" />
+    <PackageReference Include="CommandLineParser.Unofficial.CoreBeta" Version="2.1.0-beta" />
+    <PackageReference Include="System.Security.Cryptography.Hashing.Algorithms.Analyzers" Version="1.1.0" />
+    <PackageReference Include="System.Security.Cryptography.Algorithms" Version="4.2.0" />
+  </ItemGroup>
+
+  <ItemGroup Condition=" '$(TargetFramework)' == 'netstandard1.6' ">
+    <PackageReference Include="System.Collections" Version="4.0.11" />
+    <PackageReference Include="System.Collections.Concurrent" Version="4.0.12" />
+    <PackageReference Include="System.ComponentModel" Version="4.0.1" />
+    <PackageReference Include="System.Linq" Version="4.1.0" />
+    <PackageReference Include="System.Reflection" Version="4.1.0" />
+    <PackageReference Include="System.Runtime.InteropServices" Version="4.1.0" />
+    <PackageReference Include="System.Threading" Version="4.0.11" />
+    <PackageReference Include="System.Threading.Tasks" Version="4.0.11" />
+  </ItemGroup>
+
+</Project>
